@@ -19,7 +19,15 @@ async function initialize() {
         }
         const menu = document.querySelector('#extensionsMenu');
         if (menu && !document.getElementById('cl-menu-entry')) {
-            const button = document.createElement('button'); button.type = 'button'; button.id = 'cl-menu-entry'; button.className = 'list-group-item flex-container flexGap5'; button.textContent = '📚 角色书库'; button.addEventListener('click', open); menu.append(button);
+            const entry = document.createElement('div'); entry.id = 'cl-menu-entry'; entry.className = 'list-group-item flex-container flexGap5'; entry.tabIndex = 0; entry.setAttribute('role', 'button');
+            const icon = document.createElement('div'); icon.className = 'fa-fw fa-solid fa-book-open extensionsMenuExtensionButton'; icon.setAttribute('aria-hidden', 'true');
+            const label = document.createElement('span'); label.textContent = '角色书库'; entry.append(icon, label);
+            entry.addEventListener('click', open);
+            entry.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault(); event.stopPropagation(); if (!event.repeat) entry.click();
+            });
+            menu.append(entry);
         }
         const ctx = host.context();
         if (ctx.SlashCommandParser && ctx.SlashCommand) {

@@ -26,6 +26,6 @@ export function prepareOpenCodePayload(payload, operation, sessionId) {
     return {
         ...payload,
         custom_url: operation === 'status' && !endpoint.plan.endsWith('legacy') ? 'https://opencode.ai/inference/v1' : endpoint.baseUrl,
-        custom_include_headers: JSON.stringify({ 'x-opencode-session': sessionId, 'User-Agent': 'SillyTavern-Card-Library/0.3.1' }),
+        custom_include_headers: JSON.stringify({ 'x-opencode-session': sessionId, 'User-Agent': 'SillyTavern-Card-Library/0.3.2' }),
     };
 }

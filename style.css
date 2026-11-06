@@ -227,10 +227,9 @@
 .cl-root .cl-message-label { color: var(--cl-bookmark); font-size: 11px; margin-bottom: 8px; }
 .cl-root .cl-message .cl-prose { font-size: 13px; }
 #cl-extension-settings { padding: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-#cl-extension-settings button, #cl-menu-entry { cursor: pointer; min-height: 44px; }
+#cl-extension-settings button { cursor: pointer; min-height: 44px; }
 #cl-extension-settings > button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: auto; min-width: max-content; max-width: none; white-space: nowrap; word-break: keep-all; overflow-wrap: normal; padding-inline: 12px; }
 #cl-extension-settings > small { flex: 1 1 170px; min-width: 0; }
-#cl-menu-entry { white-space: nowrap; word-break: keep-all; }
 .cl-root .cl-opening-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .cl-root .cl-opening-tools > select { flex: 1 1 140px; min-width: 0; }
 .cl-root .cl-opening-frame { display: block; width: 100%; height: 58dvh; min-height: 320px; border: 1px solid var(--cl-line); border-radius: 8px; background: var(--cl-page); }

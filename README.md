@@ -2,7 +2,7 @@
 
 用于 SillyTavern / TauriTavern 的角色卡管理前端扩展。无需切换当前聊天，即可搜索和试读卡片、整理独立分组，再决定打开、编辑或删除。
 
-版本：**0.3.1**。纯 ES 模块，无构建依赖，不需要酒馆助手或额外后端服务。
+版本：**0.3.2**。纯 ES 模块，无构建依赖，不需要酒馆助手或额外后端服务。
 
 ## 功能
 
@@ -36,7 +36,7 @@ https://github.com/demilich1117/SillyTavern-Card-Library
 
 ### SillyTavern
 
-1. 解压 `SillyTavern-Card-Library-v0.3.1.zip`。
+1. 解压 `SillyTavern-Card-Library-v0.3.2.zip`。
 2. 将其中整个 `SillyTavern-Card-Library` 文件夹放入酒馆的 `data/<用户>/extensions/`。单用户通常是 `data/default-user/extensions/`。
 3. 最终路径应为 `data/default-user/extensions/SillyTavern-Card-Library/manifest.json`，不要多套一层目录。
 4. 刷新酒馆，在扩展列表确认已启用「角色书库 · Card Library」。
@@ -53,7 +53,7 @@ https://github.com/demilich1117/SillyTavern-Card-Library
 
 ### 打开入口
 
-- 输入框旁的扩展菜单 → **角色书库**。
+- 输入框旁的魔术棒扩展菜单 → 单色书本图标 **角色书库**，沿用酒馆原生菜单样式。
 - 扩展设置 → **打开角色书库**。
 - 输入斜杠命令 `/card-library`。
 
