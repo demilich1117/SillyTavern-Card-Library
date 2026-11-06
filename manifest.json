@@ -1,0 +1,11 @@
+{
+  "display_name": "角色书库 · Card Library",
+  "loading_order": 100,
+  "js": "index.js",
+  "css": "style.css",
+  "author": "gwynd",
+  "homePage": "https://github.com/demilich1117/SillyTavern-Card-Library",
+  "version": "0.3.1",
+  "minimum_client_version": "1.18.0",
+  "auto_update": false
+}

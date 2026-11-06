@@ -1,0 +1,14 @@
+{
+  "name": "sillytavern-card-library",
+  "version": "0.3.1",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "check": "node --check index.js && node --check core.js && node --check host.js && node --check ui.js && node --check preview.js && node --check opencode.js",
+    "prepare-demo": "node dev/prepare-demo.mjs",
+    "demo": "node dev/server.mjs",
+    "package": "python dev/package.py"
+  }
+}

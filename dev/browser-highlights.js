@@ -1,0 +1,41 @@
+async (page) => {
+    if (new URL(page.url()).port !== '18788') throw new Error('Fixture harness only');
+    const checks = [], check = (value, label) => { if (!value) throw new Error(label); checks.push(label); };
+    await page.reload(); await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('.cl-index-status')?.dataset.state === 'ready');
+    const search = page.getByRole('searchbox', { name: '搜索角色卡', exact: true });
+    const find = async value => { await search.fill(value); await page.waitForFunction(value => window[Symbol.for('card-library.instance')].query === value, value); };
+    await find('雾港');
+    check(await page.locator('.cl-card h3 mark').count() === 2 && await page.locator('.cl-excerpt-text mark').count() >= 2, '角色名与命中摘录同时高亮');
+    await find('"第三盏灯" 书店');
+    check((await page.locator('.cl-excerpt-text mark').allTextContents()).includes('第三盏灯') && (await page.locator('.cl-excerpt-text mark').allTextContents()).includes('书店'), '引号短语和多个关键词高亮实际命中位置');
+    await find('迟迟');
+    check(await page.locator('.cl-card-identity .cl-muted mark').innerText() === '迟迟', '作者搜索也高亮');
+    await find('悬疑');
+    check(await page.locator('.cl-card-tag-ai mark').count() >= 1 && await page.locator('.cl-card-tags > .cl-card-tag-set:not(.cl-card-tag-ai) mark').count() >= 1, 'AI 分类和卡片标签中的关键词也高亮');
+    await page.evaluate(() => { const lib = window[Symbol.for('card-library.instance')]; lib.settings.theme = 'light'; lib.applyTheme(); });
+    check(await page.locator('.cl-match').first().evaluate(el => getComputedStyle(el).backgroundColor === 'rgb(255, 227, 161)' && getComputedStyle(el).color === 'rgb(73, 25, 0)'), '浅色高亮使用深字浅底');
+    await page.waitForTimeout(200); await page.screenshot({ path: 'output/playwright/highlight-desktop-light.png' });
+    await find('');
+    check(await page.locator('.cl-match').count() === 0 && await page.locator('.cl-card-tags').count() > 0, '清空搜索立即移除高亮并保留标签');
+    await page.evaluate(async () => {
+        const lib = window[Symbol.for('card-library.instance')], { makeRecord } = await import('/core.js');
+        const sample = { avatar: 'fixture-unicode.png', data: { name: '全角 ＡＢＣ', description: '<img src=x onerror="window.highlightXss=true"> 只作为文字', creator: '演示作者', first_mes: '阅读示例', tags: ['<img>'] } };
+        lib.records.set(sample.avatar, makeRecord(sample)); lib.renderList();
+    });
+    await find('abc');
+    check(await page.locator('.cl-card h3 mark').innerText() === 'ＡＢＣ', '全半角和大小写归一化搜索保留原字符高亮');
+    await find('<img');
+    check((await page.locator('.cl-excerpt-text mark').allTextContents()).every(text => text === '<img') && await page.locator('.cl-excerpt-text img').count() === 0 && !await page.evaluate(() => window.highlightXss), '含 HTML 的关键词与摘录只作文本高亮，不插入或执行 HTML');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => { const lib = window[Symbol.for('card-library.instance')]; lib.settings.theme = 'dark'; lib.applyTheme(); });
+    await find('悬疑');
+    check(await page.locator('.cl-match').first().evaluate(el => getComputedStyle(el).backgroundColor === 'rgb(104, 80, 28)' && getComputedStyle(el).color === 'rgb(255, 240, 194)'), '深色高亮使用浅字深底');
+    await page.waitForTimeout(200); await page.screenshot({ path: 'output/playwright/highlight-mobile-dark.png' });
+    await page.setViewportSize({ width: 320, height: 568 });
+    check(await page.locator('#cl-library').evaluate(el => el.scrollWidth <= el.clientWidth) && await page.locator('.cl-card-tags').evaluateAll(els => els.every(el => el.getBoundingClientRect().height <= 36)), '320px 高亮保持标签两行上限与无横向溢出');
+    await page.locator('.cl-card[data-id="fixture-1.png"] .cl-card-tags mark').first().click();
+    check(await page.getByRole('tab', { name: '人设', exact: true }).isVisible(), '点击标签中的高亮仍正常进入角色详情');
+    return { passed: checks.length, checks };
+}
