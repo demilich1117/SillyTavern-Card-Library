@@ -8,7 +8,7 @@ root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
 package = json.loads((root / "package.json").read_text(encoding="utf-8"))
 assert manifest["version"] == package["version"]
-files = ["manifest.json", "index.js", "core.js", "library-index.js", "host.js", "preview.js", "opencode.js", "ui.js", "style.css", "README.md", "DESIGN.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "references/compatibility.md", "validation-2026-11-06.md"]
+files = ["manifest.json", "index.js", "core.js", "library-index.js", "persistent-cache.js", "host.js", "preview.js", "opencode.js", "ui.js", "style.css", "README.md", "DESIGN.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "references/compatibility.md", "validation-2026-11-06.md"]
 for name in (manifest["js"], manifest["css"]):
     assert name in files and (root / name).is_file()
 output = root / "output"

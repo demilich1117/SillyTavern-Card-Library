@@ -242,8 +242,9 @@ export class CardLibrary {
         if (result.cancelled || token !== this.indexToken || !this.dialog?.open) return;
         this.indexErrors = result.errors.map(item => `${item.name}：${item.message}`);
         this.isIndexing = false;
-        this.indexStatus.dataset.state = this.indexErrors.length ? 'error' : 'ready';
-        this.indexStatus.replaceChildren(el('span', '', this.indexErrors.length ? `${this.indexErrors.length} 张卡片或世界书读取失败，搜索结果可能不完整。` : `${cards.length} 张卡片已就绪 · 复用 ${result.reused} 张${this.includeWorld ? ' · 已包含关联世界书' : ' · 含内嵌世界书'}`));
+        this.indexStatus.dataset.state = this.indexErrors.length || this.index.storageError ? 'error' : 'ready';
+        this.indexStatus.replaceChildren(el('span', '', this.indexErrors.length ? `${this.indexErrors.length} 张卡片或世界书读取失败，搜索结果可能不完整。` : `${cards.length} 张卡片已就绪 · 复用 ${result.reused} 张${result.restored ? ` · 从本地恢复 ${result.restored} 张` : ''}${this.includeWorld ? ' · 已包含关联世界书' : ' · 含内嵌世界书'}`));
+        if (this.index.storageError) this.indexStatus.append(el('span', '', ` ${this.index.storageError}`));
         if (this.indexErrors.length) this.indexStatus.append(button('查看并重试', () => {
             const popup = this.popup('部分内容未读入'); popup.body.append(textBlock(this.indexErrors.join('\n')));
             popup.footer.append(button('重试读取', () => { popup.close(); this.refresh(); }, { kind: 'cl-primary' }));
@@ -644,6 +645,16 @@ export class CardLibrary {
     preferences() {
         const popup = this.popup('书库设置与整理数据');
         popup.body.append(field('外观', select('外观', [['auto', '跟随酒馆明暗'], ['light', '浅色'], ['dark', '深色']], this.settings.theme, value => { this.settings.theme = value; this.persist(); this.applyTheme(); })));
+        popup.body.append(el('h3', '', '本地索引缓存'), paragraph('自动保存在当前浏览器或 TT 本地。刷新 / 重启后校验文件变化，只补读新增或变化的卡片。清除浏览器数据会同时清除缓存；整理数据导出不包含缓存。'));
+        popup.body.append(button('清除并重建缓存', async () => {
+            const rebuild = popup.body.querySelector('[data-cache-rebuild]'); rebuild.disabled = true;
+            try {
+                this.abortIndex(); await this.index.clearPersistent();
+                if (this.index.storageError) throw new Error(this.index.storageError);
+                popup.close(); await this.refresh(true);
+            } catch (error) { popup.fail(error); rebuild.disabled = false; }
+        }, { glyph: 'refresh' }));
+        popup.body.lastElementChild.dataset.cacheRebuild = '';
         popup.body.append(el('h3', '', 'AI 概括'), button('配置 AI / 额外 API', () => this.apiSettingsDialog(), { glyph: 'spark' }), paragraph('支持跟随当前连接，或使用独立的 OpenAI 兼容 API。概括成功后自动保存。'));
         popup.body.append(el('h3', '', '分组迁移与备份'), paragraph('导出独立分组、收藏和 AI 概括。文件不包含角色卡本体或聊天；跨设备迁移时需保留相同的卡片文件名。'));
         popup.body.append(button('导出整理数据', async () => {

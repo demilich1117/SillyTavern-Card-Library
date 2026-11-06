@@ -41,6 +41,6 @@ test('extra API model and generation requests work without external Go plugin an
     assert.equal(status.custom_url, 'https://opencode.ai/inference/v1'); assert.equal(generate.custom_url, OPENCODE_GO_URL);
     const headers = JSON.parse(generate.custom_include_headers);
     assert.equal(headers['x-opencode-session'], JSON.parse(status.custom_include_headers)['x-opencode-session']);
-    assert.equal(headers['User-Agent'], 'SillyTavern-Card-Library/0.4.0');
+    assert.equal(headers['User-Agent'], 'SillyTavern-Card-Library/0.5.0');
     assert.equal(generate.secret_id, 'own-key'); assert.equal(ctx.extensionSettings.card_library.summaries['card:card.png'].summary, 'saved');
 });

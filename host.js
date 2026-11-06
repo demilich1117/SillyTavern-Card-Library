@@ -1,6 +1,7 @@
 import { SETTINGS_KEY, normalizeSettings, normalizeApiConfig, validateApiConfig, modelNames, editPatch, chatMessages, classificationInput, parseClassification, metaKey, cardData, mapLimit } from './core.js';
 import { processOpening } from './preview.js';
 import { openCodeEndpoint, openCodeSession, prepareOpenCodePayload } from './opencode.js';
+import { LocalCardCache } from './persistent-cache.js';
 
 // Internal imports are confined to this adapter. Verified against both pinned hosts.
 export function createHost({ getContext = () => globalThis.SillyTavern.getContext(), getLibs = () => globalThis.SillyTavern?.libs, fetcher = (...args) => fetch(...args), loadModule = path => import(path) } = {}) {
@@ -61,11 +62,32 @@ export function createHost({ getContext = () => globalThis.SillyTavern.getContex
     return {
         context, settings, saveSettings, getCard, bookNames,
         libs: getLibs,
+        contentKey(value) { return getLibs()?.sha256?.(value) || value; },
+        cacheStore() {
+            const local = settings();
+            if (!/^[a-zA-Z0-9_-]{1,100}$/.test(local.cacheNamespace || '')) { local.cacheNamespace = crypto.randomUUID(); saveSettings(local); }
+            return new LocalCardCache(local.cacheNamespace);
+        },
+        async cardStamp(card, signal) {
+            const controller = new AbortController(), abort = () => controller.abort(signal?.reason);
+            if (signal?.aborted) abort();
+            signal?.addEventListener('abort', abort, { once: true });
+            const timer = setTimeout(() => controller.abort(new Error('检查角色文件变更超时，请重试。')), 15000);
+            try {
+                const response = await fetcher(`/characters/${encodeURIComponent(card.avatar)}`, { method: 'HEAD', cache: 'no-store', signal: controller.signal });
+                if ([404, 405, 501].includes(response.status)) return null;
+                if (!response.ok) throw new Error(`检查角色文件失败（HTTP ${response.status}）`);
+                // ETags include the file's size and modification time in both pinned hosts.
+                // Last-Modified alone has only second resolution and can miss fast edits.
+                return response.headers.get('etag') || null;
+            } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+        },
         async previewRevision() {
             const engine = await regex(), ctx = context();
-            return JSON.stringify([ctx.name1, ctx.extensionSettings.disabledExtensions?.includes('regex'), ctx.extensionSettings.character_allowed_regex,
+            const value = JSON.stringify([ctx.name1, ctx.extensionSettings.disabledExtensions?.includes('regex'), ctx.extensionSettings.character_allowed_regex,
                 engine.getScriptsByType(engine.SCRIPT_TYPES.GLOBAL, { allowedOnly: true }),
                 engine.getScriptsByType(engine.SCRIPT_TYPES.PRESET, { allowedOnly: true })]);
+            return getLibs()?.sha256?.(value) || value;
         },
         async opening(card, index = 0) {
             const engine = await regex(), ctx = context(), data = cardData(card);

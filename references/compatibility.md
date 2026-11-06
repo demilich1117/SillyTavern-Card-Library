@@ -45,3 +45,11 @@ TT 的 `chat.open()` 是绑定身份的存储 handle，不是 UI 切换接口，
 0.4.0 缓存失效沿用上述固定提交：`CHARACTER_EDITED` 参数为 `{detail:{id,character}}`，`CHARACTER_DELETED` 为 `{id,character}`，`CHARACTER_DUPLICATED` 为 `{oldAvatar,newAvatar}`，`CHARACTER_RENAMED` 传旧 / 新 avatar，`WORLDINFO_UPDATED` 传书名与数据，`CHARACTER_PAGE_LOADED` 提示角色列表更新。源自两端 `script.js` 与 `world-info.js`；TT 没有用 ST 版本号替代核验。按 avatar 更新缓存，未知编辑身份时保守失效全部；列表事件重新比较源卡，聊天统计变化不触发正文读取。
 
 `previewRevision` 读取既有正则接口的全局 / 预设规则、局部规则许可、正则禁用状态和用户名，变化时仅重做开场摘录；卡片局部规则随卡内容失效。额外世界书关联由既有 `world_info.charLore` 比较。所有缓存与分批逻辑属于前端内存，不新增宿主 API；世界书请求在单个卡的任务内串行，最多 3 张卡的索引请求并行。
+
+0.5.0 增加浏览器 / WebView IndexedDB 持久层，仍不新增后端 API。宿主设置只增加随机 `cacheNamespace`，用于隔离站点内不同酒馆配置；普通整理数据导出排除该字段。
+
+跨页面恢复浅卡时调用 `HEAD /characters/<encodeURIComponent(avatar)>`，`cache: no-store`，只读取 ETag。ST 1.19 的真实角色资源核验返回 200、ETag 与长度头；浅投影的 `date_added` / `data_size` 不足以证明正文未变，因此没有把它们作为唯一持久校验依据。完整卡源则复用 `SillyTavern.libs.sha256` 对源内容和正则配置生成比较键；没有 sha256 时保留原比较文本，不以不可靠短 hash 替代。
+
+TT 2.3 固定源码：[用户资源响应](https://github.com/Darkatse/TauriTavern/blob/f6126b4fc9243eb3990f2c0bad86e2afcb502f22/src-tauri/crates/tt-application/src/services/host_resource_service/user_data.rs) 接受 GET / HEAD / OPTIONS，HEAD 在读取完整文件体之前返回；[ETag 与响应头](https://github.com/Darkatse/TauriTavern/blob/f6126b4fc9243eb3990f2c0bad86e2afcb502f22/src-tauri/crates/tt-application/src/services/host_resource_service/response.rs) 从文件元数据生成 representation ETag。仅 Last-Modified 的秒级时间戳不用于证明未变；没有 ETag 时补读，HTTP / 网络校验失败则保留重试状态，不悄悄采用旧数据。
+
+持久缓存只保留卡片、比较键与处理后的文本摘录，搜索字段按批重建。独立世界书在新页面首次需要时重新读取，避免其独立变更未触发旧页面事件；缓存格式编号在卡片 / 摘录语义变化时递增。真实 IndexedDB 刷新 / 浏览器重启验证通过；TT 原生存储生命周期仍待实测。

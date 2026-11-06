@@ -9,6 +9,7 @@ async (page) => {
         const state = window.batchValidation = { reads: {}, active: 0, max: 0, ticks: 0, batches: 0, fail: true };
         state.timer = setInterval(() => state.ticks++, 10);
         lib.host.thumbnail = () => '/avatar.svg?i=1';
+        lib.host.cardStamp = async card => `synthetic-${card.avatar}`;
         lib.host.getCard = async (avatar, signal) => {
             state.reads[avatar] = (state.reads[avatar] || 0) + 1; state.active++; state.max = Math.max(state.max, state.active);
             try {

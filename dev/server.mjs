@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fixtures } from './fixtures.mjs';
+import { createHash } from 'node:crypto';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 let cards = fixtures();
@@ -12,6 +13,12 @@ const server = http.createServer(async (request, response) => {
     const url = new URL(request.url, 'http://127.0.0.1');
     const send = (value, status = 200) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(value)); };
     try {
+        if (request.method === 'HEAD' && url.pathname.startsWith('/characters/')) {
+            const avatar = decodeURIComponent(url.pathname.slice('/characters/'.length)), card = cards.find(card => card.avatar === avatar);
+            counts.requests.push({ path: '/characters/HEAD', body: { avatar } });
+            if (!card) { response.writeHead(404); response.end(); return; }
+            response.writeHead(200, { ETag: `"${createHash('sha256').update(JSON.stringify(card)).digest('hex')}"` }); response.end(); return;
+        }
         if (url.pathname.startsWith('/api/')) {
             let raw = ''; for await (const chunk of request) raw += chunk;
             const body = JSON.parse(raw || '{}'); counts.requests.push({ path: url.pathname, body: url.pathname === '/api/secrets/write' ? { ...body, value: '[redacted]' } : body });
@@ -32,6 +39,7 @@ const server = http.createServer(async (request, response) => {
             if (url.pathname === '/api/chats/get') return send([{ user_name: '你', character_name: card?.name, chat_metadata: { fixture: true } }, ...Array.from({ length: 125 }, (_, i) => ({ name: i % 2 ? card?.name : '你', is_user: i % 2 === 0, mes: i === 0 ? '最早的一条消息，暗号是琥珀钥匙。' : `这是第 ${i + 1} 条故事记录。海风穿过街道，书页被轻轻翻动。` }))]);
             if (url.pathname === '/api/worldinfo/get') return send({ entries: { 3: { comment: body.name, key: ['灯塔'], content: '档案记载：紫色鲸鱼曾经出现在近海。', disable: false } } });
             if (url.pathname === '/api/test-state') return send({ cards, counts });
+            if (url.pathname === '/api/test-add') { if (body.avatar && body.data && !cards.some(card => card.avatar === body.avatar)) cards.push(body); return send({ ok: true }); }
             if (url.pathname === '/api/test-reset') { cards = fixtures(); counts.requests = []; counts.ai = 0; return send({ ok: true }); }
             return send({ error: 'unknown path' }, 404);
         }
