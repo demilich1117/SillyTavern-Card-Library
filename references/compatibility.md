@@ -41,3 +41,7 @@ TT 的 `chat.open()` 是绑定身份的存储 handle，不是 UI 切换接口，
 拉取模型可在模型名未填写时准备密钥；只保存密钥库条目，书库连接在点击保存后才切换。正常导出不包含这些连接字段、密钥引用或会话命名空间。AI 结果由适配层解析并保存，生命周期独立于 UI 弹窗。
 
 开发时下载的上游源码只在被 Git 忽略的 `references/` 临时文件中保留，含上游许可证 `LICENSE-AGPL-3.0`；交付 ZIP 按白名单仅包含此核验文档，不含上游源码。
+
+0.4.0 缓存失效沿用上述固定提交：`CHARACTER_EDITED` 参数为 `{detail:{id,character}}`，`CHARACTER_DELETED` 为 `{id,character}`，`CHARACTER_DUPLICATED` 为 `{oldAvatar,newAvatar}`，`CHARACTER_RENAMED` 传旧 / 新 avatar，`WORLDINFO_UPDATED` 传书名与数据，`CHARACTER_PAGE_LOADED` 提示角色列表更新。源自两端 `script.js` 与 `world-info.js`；TT 没有用 ST 版本号替代核验。按 avatar 更新缓存，未知编辑身份时保守失效全部；列表事件重新比较源卡，聊天统计变化不触发正文读取。
+
+`previewRevision` 读取既有正则接口的全局 / 预设规则、局部规则许可、正则禁用状态和用户名，变化时仅重做开场摘录；卡片局部规则随卡内容失效。额外世界书关联由既有 `world_info.charLore` 比较。所有缓存与分批逻辑属于前端内存，不新增宿主 API；世界书请求在单个卡的任务内串行，最多 3 张卡的索引请求并行。

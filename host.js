@@ -1,4 +1,4 @@
-import { SETTINGS_KEY, normalizeSettings, normalizeApiConfig, validateApiConfig, modelNames, editPatch, chatMessages, classificationInput, parseClassification, metaKey, cardData } from './core.js';
+import { SETTINGS_KEY, normalizeSettings, normalizeApiConfig, validateApiConfig, modelNames, editPatch, chatMessages, classificationInput, parseClassification, metaKey, cardData, mapLimit } from './core.js';
 import { processOpening } from './preview.js';
 import { openCodeEndpoint, openCodeSession, prepareOpenCodePayload } from './opencode.js';
 
@@ -53,9 +53,20 @@ export function createHost({ getContext = () => globalThis.SillyTavern.getContex
         if (api.isGenerating?.() || aiBusy || savingApi) throw new Error('请等待当前生成或 API 设置保存完成后再操作。');
         return api;
     }
+    async function bookNames(card) {
+        const module = await world(), stem = card.avatar.replace(/\.png$/i, '');
+        const extras = module.world_info?.charLore?.find(item => item.name === stem)?.extraBooks || [];
+        return [...new Set([card.data?.extensions?.world, ...extras].filter(name => typeof name === 'string' && name))];
+    }
     return {
-        context, settings, saveSettings, getCard,
+        context, settings, saveSettings, getCard, bookNames,
         libs: getLibs,
+        async previewRevision() {
+            const engine = await regex(), ctx = context();
+            return JSON.stringify([ctx.name1, ctx.extensionSettings.disabledExtensions?.includes('regex'), ctx.extensionSettings.character_allowed_regex,
+                engine.getScriptsByType(engine.SCRIPT_TYPES.GLOBAL, { allowedOnly: true }),
+                engine.getScriptsByType(engine.SCRIPT_TYPES.PRESET, { allowedOnly: true })]);
+        },
         async opening(card, index = 0) {
             const engine = await regex(), ctx = context(), data = cardData(card);
             const raw = [data.first_mes || '', ...(data.alternate_greetings || [])][index] || '';
@@ -137,11 +148,11 @@ export function createHost({ getContext = () => globalThis.SillyTavern.getContex
             if (result?.mode === 'failed') throw new Error('整理数据导出失败，请重试。');
         },
         async books(card, signal) {
-            const module = await world();
-            const stem = card.avatar.replace(/\.png$/i, '');
-            const extras = module.world_info?.charLore?.find(item => item.name === stem)?.extraBooks || [];
-            const names = [...new Set([card.data?.extensions?.world, ...extras].filter(name => typeof name === 'string' && name))];
-            return Promise.all(names.map(async name => ({ name, data: await request('/api/worldinfo/get', { name }, signal) })));
+            const names = await bookNames(card);
+            const results = await mapLimit(names, 1, async name => ({ name, data: await request('/api/worldinfo/get', { name }, signal) }), signal);
+            if (signal?.aborted) throw new DOMException('操作已取消', 'AbortError');
+            const failed = results.find(item => item?.status === 'rejected'); if (failed) throw failed.reason;
+            return results.map(item => item.value);
         },
         async saveCard(before, values) {
             const api = await requireIdle();

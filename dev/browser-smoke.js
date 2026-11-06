@@ -1,4 +1,11 @@
 async (page) => {
+    if (new URL(page.url()).port !== '18788') throw new Error('Fixture harness only');
+    await page.goto('http://127.0.0.1:18788/');
+    await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).waitFor();
+    await page.evaluate(async () => { localStorage.clear(); await fetch('/api/test-reset', { method: 'POST' }); });
+    await page.reload(); await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('.cl-index-status')?.dataset.state === 'ready');
     const checks = [];
     const check = (condition, name) => { if (!condition) throw new Error(name); checks.push(name); };
     const search = page.getByRole('searchbox', { name: '搜索角色卡', exact: true });

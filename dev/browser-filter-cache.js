@@ -1,0 +1,50 @@
+async (page) => {
+    const checks = [], check = (value, label) => { if (!value) throw Error(label); checks.push(label); };
+    await page.goto('http://127.0.0.1:18788/');
+    await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).waitFor();
+    await page.evaluate(async () => { localStorage.clear(); await fetch('/api/test-reset', { method: 'POST' }); }); await page.reload();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).waitFor();
+    await page.evaluate(() => { const lib = window[Symbol.for('card-library.instance')]; lib.includeWorld = true; lib.settings.summaries['card:fixture-4.png'] = { summary: '测试分类', types: ['悬疑'] }; });
+    const ready = () => page.waitForFunction(() => document.querySelector('.cl-index-status')?.dataset.state === 'ready');
+    const counts = () => page.evaluate(async () => { const { counts } = await (await fetch('/api/test-state', { method: 'POST' })).json(); return { cards: counts.requests.filter(r => r.path === '/api/characters/get').length, worlds: counts.requests.filter(r => r.path === '/api/worldinfo/get').length, ai: counts.ai }; });
+    await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).click(); await ready(); const first = await counts();
+    check(first.cards === 8 && first.worlds === 2, '首次读取八张懒加载卡和两个关联世界书');
+    await page.getByRole('button', { name: '关闭书库', exact: true }).click();
+    await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).click(); await ready();
+    check(JSON.stringify(await counts()) === JSON.stringify(first), '重新打开不重复读取角色卡和关联世界书');
+    const search = page.getByRole('searchbox', { name: '搜索角色卡', exact: true });
+    await search.fill('第三盏灯'); await page.waitForFunction(() => document.querySelectorAll('.cl-card').length === 1);
+    await page.locator('.cl-card[data-id="fixture-1.png"]').getByRole('button', { name: '筛选标签：悬疑', exact: true }).click();
+    check(await page.locator('.cl-card').count() === 3 && await search.inputValue() === '' && await page.locator('.cl-active-tag').isVisible(), '点击标签清除旧关键词并显示原标签或 AI 类型相同的全部角色');
+    check(!await page.locator('#cl-library').evaluate(el => el.classList.contains('cl-has-detail')), '标签点击不会同时误开角色详情');
+    check(await page.locator('.cl-card-open button, .cl-card-body button').count() === 0, '筛选按钮与阅读按钮相互独立，无嵌套交互控件');
+    await search.fill('江湖'); await page.waitForFunction(() => document.querySelectorAll('.cl-card').length === 1);
+    check(await page.locator('.cl-card').getAttribute('data-id') === 'fixture-4.png', '标签筛选仍可叠加关键词搜索');
+    await search.fill(''); await page.waitForFunction(() => document.querySelectorAll('.cl-card').length === 3);
+    await page.getByRole('button', { name: '清除标签筛选', exact: true }).click();
+    check(await page.locator('.cl-card').count() === 8, '清除标签恢复完整书库');
+    await page.locator('.cl-card[data-id="fixture-3.png"]').getByRole('button', { name: '筛选标签：悬疑', exact: true }).press('Enter');
+    check(await page.locator('.cl-card').count() === 3, '标签可通过键盘 Enter 筛选');
+    check(JSON.stringify(await counts()) === JSON.stringify(first), '筛选、清除、搜索不追加网络读取或模型请求');
+    await page.waitForTimeout(200); await page.screenshot({ path: 'output/playwright/filter-desktop-light.png' });
+    await page.getByRole('button', { name: '清除标签筛选', exact: true }).click();
+    await page.evaluate(() => SillyTavern.getContext().eventSource.emit('CHARACTER_EDITED', { detail: { character: { avatar: 'fixture-2.png' } } }));
+    await page.waitForFunction(() => document.querySelector('.cl-index-status').textContent.includes('复用 7 张')); await ready();
+    check((await counts()).cards === 9, '编辑单张卡仅重新读取这一张');
+    const worldVersion = await page.evaluate(() => { const index = window[Symbol.for('card-library.instance')].index; SillyTavern.getContext().eventSource.emit('WORLDINFO_UPDATED', '雾港档案'); return index.version; });
+    await page.waitForFunction(version => window[Symbol.for('card-library.instance')].index.version > version && document.querySelector('.cl-index-status').dataset.state === 'ready', worldVersion);
+    const afterWorld = await counts();
+    check(afterWorld.cards === 9 && afterWorld.worlds === 4, `世界书变更只刷新相关书目，不重读角色卡 (${JSON.stringify(afterWorld)})`);
+    await page.getByRole('button', { name: '刷新书库', exact: true }).click(); await ready();
+    check((await counts()).cards === 17, '手动刷新明确强制重新读取所有卡片');
+    for (const width of [390, 320]) {
+        await page.setViewportSize({ width, height: width === 390 ? 844 : 568 });
+        await page.evaluate(() => { const lib = window[Symbol.for('card-library.instance')]; lib.settings.theme = 'dark'; lib.applyTheme(); });
+        await page.locator('.cl-card[data-id="fixture-3.png"]').getByRole('button', { name: '筛选标签：悬疑', exact: true }).click();
+        check(await page.locator('.cl-card').count() === 3 && await page.locator('#cl-library').evaluate(el => el.scrollWidth <= el.clientWidth), `${width}px 标签筛选与清除入口可用且无横向溢出`);
+        await page.waitForTimeout(200); await page.screenshot({ path: `output/playwright/filter-mobile-${width}.png` });
+        await page.getByRole('button', { name: '清除标签筛选', exact: true }).click();
+    }
+    return { passed: checks.length, checks, first, final: await counts() };
+}

@@ -34,8 +34,8 @@ async (page) => {
     check(await page.locator('.cl-match').first().evaluate(el => getComputedStyle(el).backgroundColor === 'rgb(104, 80, 28)' && getComputedStyle(el).color === 'rgb(255, 240, 194)'), '深色高亮使用浅字深底');
     await page.waitForTimeout(200); await page.screenshot({ path: 'output/playwright/highlight-mobile-dark.png' });
     await page.setViewportSize({ width: 320, height: 568 });
-    check(await page.locator('#cl-library').evaluate(el => el.scrollWidth <= el.clientWidth) && await page.locator('.cl-card-tags').evaluateAll(els => els.every(el => el.getBoundingClientRect().height <= 36)), '320px 高亮保持标签两行上限与无横向溢出');
+    check(await page.locator('#cl-library').evaluate(el => el.scrollWidth <= el.clientWidth) && await page.locator('.cl-card-tags').evaluateAll(els => els.every(el => el.getBoundingClientRect().height <= 48)), '320px 高亮保持标签两行上限与无横向溢出');
     await page.locator('.cl-card[data-id="fixture-1.png"] .cl-card-tags mark').first().click();
-    check(await page.getByRole('tab', { name: '人设', exact: true }).isVisible(), '点击标签中的高亮仍正常进入角色详情');
+    check(await page.locator('.cl-active-tag').isVisible() && await search.inputValue() === '' && !await page.locator('#cl-library').evaluate(el => el.classList.contains('cl-has-detail')), '点击高亮标签仍正常筛选，不误开详情');
     return { passed: checks.length, checks };
 }

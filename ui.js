@@ -1,6 +1,7 @@
-import { EDIT_FIELDS, normalizeSettings, normalizeApiConfig, exportSettings, makeRecord, cardData, bookEntries, filterRecords, metaKey, unique, normalizeText, highlightRanges, mapLimit, importLibrary, classificationInput } from './core.js';
+import { EDIT_FIELDS, normalizeSettings, normalizeApiConfig, exportSettings, cardData, bookEntries, filterRecords, metaKey, unique, normalizeText, highlightRanges, importLibrary, classificationInput } from './core.js';
 import { renderOpening, previewDocument } from './preview.js';
 import { OPENCODE_GO_URL, openCodeEndpoint } from './opencode.js';
+import { LibraryIndex } from './library-index.js';
 
 const icons = {
     book: 'M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-2H4z M20 4h-4a3 3 0 0 0-3 3v14a4 4 0 0 1 4-2h3z',
@@ -67,7 +68,7 @@ function highlightMatches(node, query) {
         fragment.append(document.createTextNode(value.slice(cursor))); textNode.replaceWith(fragment);
     }
 }
-function cardTags(tags, summary) {
+function cardTags(tags, summary, onSelect, selectedTag) {
     const block = el('div', 'cl-card-tags'), descriptions = [];
     for (const [label, values, kind] of [
         [summary?.stale ? 'AI 分类（待更新）' : 'AI 分类', summary?.types, 'cl-card-tag-ai'],
@@ -77,7 +78,13 @@ function cardTags(tags, summary) {
         if (!names.length) continue;
         if (block.childNodes.length) block.append(document.createTextNode(' / '));
         const row = el('span', `cl-card-tag-set ${kind}`);
-        row.append(el('span', 'cl-card-tag-source', `${label}：`), document.createTextNode(names.join(' · ')));
+        row.append(el('span', 'cl-card-tag-source', `${label}：`));
+        names.forEach((name, index) => {
+            if (index) row.append(document.createTextNode(' · '));
+            const link = el('button', 'cl-tag-button', name); link.type = 'button'; link.title = `筛选同标签角色：${name}`;
+            link.setAttribute('aria-label', `筛选标签：${name}`); link.setAttribute('aria-pressed', String(normalizeText(name) === normalizeText(selectedTag)));
+            link.addEventListener('click', () => onSelect(name)); row.append(link);
+        });
         block.append(row); descriptions.push(`${label}：${names.join(' · ')}`);
     }
     if (!descriptions.length) return null;
@@ -87,20 +94,27 @@ function cardTags(tags, summary) {
 export class CardLibrary {
     constructor(host) {
         this.host = host;
-        this.records = new Map(); this.selected = new Set(); this.focused = null;
+        this.index = new LibraryIndex(host, processed => renderOpening(processed, host.libs()).plain);
+        this.records = this.index.records; this.selected = new Set(); this.focused = null;
         this.selectionMode = false;
-        this.query = ''; this.group = 'all'; this.scope = 'all'; this.sort = 'name'; this.page = 1;
+        this.query = ''; this.tag = ''; this.group = 'all'; this.scope = 'all'; this.sort = 'name'; this.page = 1;
         this.includeWorld = false; this.tab = 'overview'; this.indexToken = 0; this.detailToken = 0;
         this.popups = new Set(); this.indexErrors = []; this.isIndexing = false; this.mutating = false;
         this.unsubscribe = host.subscribe((name, ...args) => {
-            if (name === 'CHARACTER_RENAMED') this.moveIdentity(args[0], args[1]);
+            this.abortIndex();
+            if (name === 'CHARACTER_RENAMED') { this.moveIdentity(args[0], args[1]); this.index.remove(args[0]); this.index.invalidateCard(args[1]); }
             if (name === 'CHARACTER_EDITED') {
                 const avatar = args[0]?.detail?.character?.avatar;
+                this.index.invalidateCard(avatar);
                 const summary = avatar && this.settings.summaries[metaKey(avatar)];
                 if (summary) { summary.stale = true; this.persist(); }
             }
-            if (name === 'CHARACTER_PAGE_LOADED') return; // Pagination is not a data mutation.
-            this.records.clear();
+            if (name === 'CHARACTER_DELETED') {
+                const avatar = args[0]?.character?.avatar;
+                if (avatar) this.index.remove(avatar);
+            }
+            if (name === 'CHARACTER_DUPLICATED') this.index.invalidateCard(args[0]?.newAvatar);
+            if (name === 'WORLDINFO_UPDATED') this.index.invalidateWorld(args[0]);
             if (this.dialog?.open && !this.mutating) {
                 clearTimeout(this.eventTimer); this.eventTimer = setTimeout(() => this.refresh(), 160);
             }
@@ -167,7 +181,7 @@ export class CardLibrary {
         this.scopeSelect = select('搜索范围', [['all', '全部内容'], ['name', '仅名称'], ['content', '人设 / 备注'], ['opening', '开场白'], ['world', '世界书']], this.scope, value => { this.scope = value; this.page = 1; this.renderList(); }); filters.append(this.scopeSelect);
         const worldLabel = el('label', 'cl-check'); const worldCheckbox = el('input'); worldCheckbox.type = 'checkbox'; worldCheckbox.checked = this.includeWorld;
         this.worldCheckbox = worldCheckbox;
-        worldCheckbox.addEventListener('change', () => { this.includeWorld = worldCheckbox.checked; this.refresh(true); });
+        worldCheckbox.addEventListener('change', () => { this.includeWorld = worldCheckbox.checked; this.refresh(); });
         worldLabel.append(worldCheckbox, el('span', '', '含关联世界书')); filters.append(worldLabel);
         this.indexStatus = el('div', 'cl-index-status'); this.indexStatus.setAttribute('aria-live', 'polite');
         const collectionHeader = el('div', 'cl-collection-header');
@@ -179,7 +193,8 @@ export class CardLibrary {
         this.batch = el('div', 'cl-batch'); this.results = el('div', 'cl-results'); this.results.setAttribute('aria-label', '角色卡结果');
         this.pager = el('div', 'cl-pager');
         this.browse = el('div', 'cl-browse-scroll');
-        const controls = el('div', 'cl-browse-controls'); controls.append(searchRow, mobileGroupRow, filters, this.indexStatus, collectionHeader);
+        this.tagBar = el('div', 'cl-active-tag'); this.tagBar.hidden = true;
+        const controls = el('div', 'cl-browse-controls'); controls.append(searchRow, mobileGroupRow, this.tagBar, filters, this.indexStatus, collectionHeader);
         this.browse.append(controls, this.results, this.pager);
         this.main.append(this.browse, this.batch);
         this.detail = el('aside', 'cl-detail'); this.detail.setAttribute('aria-label', '角色卡预览');
@@ -205,55 +220,44 @@ export class CardLibrary {
     status(message = '', error = false) {
         if (!this.live) return; this.live.textContent = message; this.live.classList.toggle('cl-error', error); this.live.hidden = !message;
     }
-    abortIndex() { this.indexToken++; this.indexAbort?.abort(); this.isIndexing = false; }
+    abortIndex() { this.indexToken++; this.indexAbort?.abort(); this.index.cancel(); this.isIndexing = false; }
     async refresh(force = false) {
         if (!this.dialog?.open || this.mutating) return;
         this.abortIndex(); const token = this.indexToken; const controller = this.indexAbort = new AbortController();
         this.indexErrors = []; this.isIndexing = true;
         this.indexStatus.dataset.state = 'loading';
-        if (force) this.records.clear();
         const cards = this.host.cards(); const ids = new Set(cards.map(card => card.avatar));
-        for (const id of this.records.keys()) if (!ids.has(id)) this.records.delete(id);
-        for (const card of cards) if (!this.records.has(card.avatar)) this.records.set(card.avatar, makeRecord(card));
         this.selected = new Set([...this.selected].filter(id => ids.has(id)));
         if (!ids.has(this.focused)) this.focused = null;
-        this.renderSidebar(); this.renderList();
-        let done = 0, lastPaint = 0;
-        const update = () => {
-            this.indexStatus.textContent = `正在建立全文索引 ${done} / ${cards.length} · 当前显示已读取内容`;
-            if (performance.now() - lastPaint > 250) { lastPaint = performance.now(); this.renderList(); }
-        };
-        update();
-        await mapLimit(cards, 3, async card => {
-            try {
-                let full = this.records.get(card.avatar)?.card;
-                if (force || card.shallow || !full?.data) full = await this.host.getCard(card.avatar, controller.signal);
-                if (token === this.indexToken) this.records.set(card.avatar, makeRecord(full));
-                const books = this.includeWorld ? await this.host.books(full, controller.signal) : [];
-                if (token !== this.indexToken) return;
-                const record = makeRecord(full, books);
-                try {
-                    const opening = await this.host.opening(full);
-                    record.previewText = renderOpening(opening.processed, this.host.libs()).plain || '此开场为前端界面，可打开开场白预览。';
-                } catch { record.previewText = '开场白暂时无法处理，请打开详情查看原文。'; }
-                if (token === this.indexToken) this.records.set(card.avatar, record);
-            } catch (error) {
-                if (token === this.indexToken && !controller.signal.aborted) this.indexErrors.push(`${card.name || card.avatar}：${notifyText(error)}`);
-            } finally { if (token === this.indexToken) { done++; update(); } }
-        }, controller.signal);
-        if (token !== this.indexToken || !this.dialog?.open) return;
+        let lastPaint = 0;
+        const result = await this.index.build(cards, { force, includeWorld: this.includeWorld, signal: controller.signal, onProgress: progress => {
+            if (token !== this.indexToken || !this.dialog?.open) return;
+            this.indexStatus.textContent = progress.batch
+                ? `索引 ${progress.completed} / ${progress.total} · 第 ${progress.batch} / ${progress.batches} 批 · 已复用 ${progress.reused} 张`
+                : '正在检查书库变更…';
+            if (!progress.completed || progress.completed === progress.total || (progress.completed > progress.reused && (progress.batchComplete || performance.now() - lastPaint > 160))) {
+                lastPaint = performance.now(); this.renderSidebar(); this.renderList();
+            }
+        } });
+        if (result.cancelled || token !== this.indexToken || !this.dialog?.open) return;
+        this.indexErrors = result.errors.map(item => `${item.name}：${item.message}`);
         this.isIndexing = false;
         this.indexStatus.dataset.state = this.indexErrors.length ? 'error' : 'ready';
-        this.indexStatus.replaceChildren(el('span', '', this.indexErrors.length ? `${this.indexErrors.length} 张卡片或世界书读取失败，搜索结果可能不完整。` : `${cards.length} 张卡片已就绪${this.includeWorld ? ' · 已包含关联世界书' : ' · 含内嵌世界书'}`));
+        this.indexStatus.replaceChildren(el('span', '', this.indexErrors.length ? `${this.indexErrors.length} 张卡片或世界书读取失败，搜索结果可能不完整。` : `${cards.length} 张卡片已就绪 · 复用 ${result.reused} 张${this.includeWorld ? ' · 已包含关联世界书' : ' · 含内嵌世界书'}`));
         if (this.indexErrors.length) this.indexStatus.append(button('查看并重试', () => {
             const popup = this.popup('部分内容未读入'); popup.body.append(textBlock(this.indexErrors.join('\n')));
-            popup.footer.append(button('重试读取', () => { popup.close(); this.refresh(true); }, { kind: 'cl-primary' }));
+            popup.footer.append(button('重试读取', () => { popup.close(); this.refresh(); }, { kind: 'cl-primary' }));
         }));
         this.renderSidebar(); this.renderList();
         if (this.focused) this.renderDetail();
     }
     groupName() { return { all: '全部角色', favorites: '我的收藏', ungrouped: '未分组' }[this.group] || this.settings.groups.find(item => item.id === this.group)?.name || '全部角色'; }
     changeGroup(value) { this.group = value; this.page = 1; this.renderSidebar(); this.renderList(); }
+    filterTag(value) {
+        clearTimeout(this.searchTimer); this.tag = value; this.query = this.search.value = ''; this.scope = this.scopeSelect.value = 'all'; this.group = 'all'; this.page = 1;
+        this.renderSidebar(); this.renderList(); this.browse.scrollTop = 0; this.results.scrollTop = 0;
+        this.tagBar.querySelector('button')?.focus({ preventScroll: true });
+    }
     renderSidebar() {
         if (!this.sidebar) return;
         this.sidebar.replaceChildren(el('div', 'cl-nav-caption', '书库'));
@@ -282,10 +286,12 @@ export class CardLibrary {
         this.filteredIds = results.map(item => item.record.id);
         const pageSize = 48, pages = Math.max(1, Math.ceil(results.length / pageSize)); this.page = Math.min(this.page, pages);
         this.collectionTitle.textContent = this.groupName(); this.count.textContent = results.length;
+        this.tagBar.hidden = !this.tag; this.tagBar.replaceChildren();
+        if (this.tag) this.tagBar.append(el('span', '', `标签：${this.tag}`), button('清除标签筛选', () => { this.tag = ''; this.page = 1; this.renderList(); this.focusBrowse(); }, { glyph: 'close' }));
         const selectedGroup = this.mobileGroup.selectedOptions[0]; if (selectedGroup) selectedGroup.textContent = `${this.groupName()} · ${results.length}`;
         this.filterButton.classList.toggle('cl-filter-active', this.scope !== 'all' || this.includeWorld || this.sort !== 'name');
         this.results.classList.toggle('cl-list-view', this.settings.view === 'list'); this.results.replaceChildren();
-        if (!results.length) this.results.append(empty(this.query ? '没有找到匹配的角色' : '这里还没有角色', this.query ? (this.isIndexing ? '全文索引仍在读取中，也可以试试其他关键词。' : '试试缩短关键词、切换搜索范围，或回到全部角色。') : this.group === 'all' ? '先在酒馆导入角色卡，再刷新书库。' : '选中角色卡，使用「分组」将它们整理到这里。', 'search'));
+        if (!results.length) this.results.append(empty(this.query || this.tag ? '没有找到匹配的角色' : '这里还没有角色', this.query || this.tag ? (this.isIndexing ? '全文索引仍在读取中，也可以试试其他关键词。' : '试试缩短关键词、清除标签筛选，或回到全部角色。') : this.group === 'all' ? '先在酒馆导入角色卡，再刷新书库。' : '选中角色卡，使用「分组」将它们整理到这里。', 'search'));
         for (const { record, hit } of results.slice((this.page - 1) * pageSize, this.page * pageSize)) {
             const tile = el('article', 'cl-card'); tile.dataset.id = record.id;
             tile.classList.toggle('cl-focused', record.id === this.focused); tile.classList.toggle('cl-selected', this.selected.has(record.id));
@@ -304,11 +310,12 @@ export class CardLibrary {
             else meta.append(el('span', '', record.card.shallow ? '读取中' : '未分组'));
             const read = el('span', 'cl-read-link', '阅读'); read.append(icon('right')); meta.append(read);
             preview.append(top);
-            const tags = cardTags(record.data.tags, this.settings.summaries[metaKey(record.id)]);
-            if (tags) { tags.id = `cl-card-tags-${this.results.children.length}`; preview.setAttribute('aria-describedby', tags.id); preview.append(tags); }
+            const tags = cardTags(record.data.tags, this.settings.summaries[metaKey(record.id)], value => this.filterTag(value), this.tag);
+            if (tags) { tags.id = `cl-card-tags-${this.results.children.length}`; preview.setAttribute('aria-describedby', tags.id); }
             highlightMatches(identity, this.query); highlightMatches(quote.querySelector('.cl-excerpt-text'), this.query);
             if (tags) highlightMatches(tags, this.query);
-            preview.append(quote, meta); tile.append(checks, favorite, preview); this.results.append(tile);
+            const reading = button('', () => this.focus(record.id), { kind: 'cl-card-body' }); reading.replaceChildren(quote, meta); reading.setAttribute('aria-label', `阅读 ${record.name}`);
+            tile.append(checks, favorite, preview); if (tags) tile.append(tags); tile.append(reading); this.results.append(tile);
         }
         this.pager.replaceChildren();
         if (pages > 1) {
@@ -344,7 +351,7 @@ export class CardLibrary {
             const reindex = this.includeWorld !== world.checked;
             this.scope = this.scopeSelect.value = scope.value; this.sort = this.sortSelect.value = sort.value;
             this.includeWorld = this.worldCheckbox.checked = world.checked; this.settings.view = view.value; this.page = 1;
-            this.persist(); popup.close(); if (reindex) this.refresh(true); else this.renderList();
+            this.persist(); popup.close(); if (reindex) this.refresh(); else this.renderList();
         }, { kind: 'cl-primary' }));
     }
     batchDialog() {
@@ -532,10 +539,10 @@ export class CardLibrary {
             if (popup.busy) return; popup.busy = true; this.mutating = true; save.disabled = true; popup.error.textContent = '';
             try {
                 const { card, warning } = await this.host.saveCard(before, Object.fromEntries(Object.entries(controls).map(([key, node]) => [key, node.value])));
-                this.records.set(id, makeRecord(card)); popup.canClose = null; popup.close(); this.status(warning || '角色卡已保存。', Boolean(warning));
+                this.index.seed(card, this.host.cards().find(item => item.avatar === id)); popup.canClose = null; popup.close(); this.status(warning || '角色卡已保存。', Boolean(warning));
                 this.renderList(); this.renderDetail();
             } catch (error) { popup.fail(error); }
-            finally { popup.busy = false; this.mutating = false; save.disabled = false; if (!popup.dialog.open) await this.refresh(true); }
+            finally { popup.busy = false; this.mutating = false; save.disabled = false; if (!popup.dialog.open) await this.refresh(); }
         }, { kind: 'cl-primary', glyph: 'check' });
         popup.footer.append(button('取消', async () => { if (!popup.busy && await popup.canClose()) popup.close(); }), save);
     }
@@ -550,13 +557,13 @@ export class CardLibrary {
             popup.busy = true; this.mutating = true; remove.disabled = true; popup.error.textContent = '';
             try {
                 const result = await this.host.deleteCards(ids, chats.checked);
-                for (const id of result.deleted) { this.records.delete(id); this.selected.delete(id); delete this.settings.summaries[metaKey(id)]; }
+                for (const id of result.deleted) { this.index.remove(id); this.selected.delete(id); delete this.settings.summaries[metaKey(id)]; }
                 for (const group of this.settings.groups) group.members = group.members.filter(id => !result.deleted.includes(id));
                 this.settings.favorites = this.settings.favorites.filter(id => !result.deleted.includes(id)); this.persist();
                 if (result.remaining.length) popup.fail(new Error(`已删除 ${result.deleted.length} 张；${result.remaining.length} 张未删除（可能取消或失败）。请关闭窗口刷新核对。`));
                 else { popup.close(); this.status(`已删除 ${result.deleted.length} 张角色卡${chats.checked ? '及对应聊天' : '，聊天记录已保留'}。`); }
             } catch (error) { popup.fail(error); }
-            finally { popup.busy = false; this.mutating = false; remove.disabled = true; acknowledgement.value = ''; await this.refresh(true); this.renderDetail(); }
+            finally { popup.busy = false; this.mutating = false; remove.disabled = true; acknowledgement.value = ''; await this.refresh(); this.renderDetail(); }
         }, { glyph: 'trash', kind: 'cl-danger' }); remove.disabled = true;
         acknowledgement.addEventListener('input', () => remove.disabled = popup.busy || acknowledgement.value.trim() !== String(ids.length));
         popup.footer.append(button('取消', () => { if (!popup.busy) popup.close(); }), remove);

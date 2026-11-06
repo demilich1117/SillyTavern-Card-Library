@@ -316,7 +316,7 @@
 .cl-root .cl-header-back { display: none; }
 .cl-root .cl-edition { letter-spacing: .06em; font: 12px Georgia, serif; }
 .cl-root .cl-button { border-radius: 3px; }
-.cl-root .cl-button:where(:not(.cl-card-open, .cl-card-star, .cl-nav-item, .cl-tab, .cl-chat-row, .cl-icon-button, .cl-new-group)) { border: 1px solid var(--cl-control-border); background: linear-gradient(var(--cl-control-top), var(--cl-control-bottom)); box-shadow: 0 1px 1px #0001; }
+.cl-root .cl-button:where(:not(.cl-card-open, .cl-card-body, .cl-card-star, .cl-nav-item, .cl-tab, .cl-chat-row, .cl-icon-button, .cl-new-group)) { border: 1px solid var(--cl-control-border); background: linear-gradient(var(--cl-control-top), var(--cl-control-bottom)); box-shadow: 0 1px 1px #0001; }
 .cl-root .cl-button:not(.cl-card-open):hover { background: var(--cl-hover); color: var(--cl-bookmark); }
 .cl-root .cl-button.cl-primary { border-color: var(--cl-nav); background: var(--cl-nav); color: var(--cl-nav-ink); box-shadow: none; }
 .cl-root .cl-button.cl-primary:hover { background: var(--cl-nav); color: var(--cl-nav-ink); filter: brightness(1.1); }
@@ -348,12 +348,20 @@
 .cl-root .cl-card { border-radius: 2px; border-color: var(--cl-line); background: var(--cl-page); box-shadow: 0 1px 2px #0002; }
 .cl-root .cl-card.cl-selected { background: var(--cl-bookmark-fill); border-color: var(--cl-bookmark); }
 .cl-root .cl-card.cl-focused { border-color: var(--cl-bookmark); box-shadow: inset 3px 0 var(--cl-bookmark); }
-.cl-root .cl-card-open, .cl-root .cl-list-view .cl-card-open { min-height: 0; border-radius: 0; padding: 12px; background: transparent; }
+.cl-root .cl-card-open, .cl-root .cl-list-view .cl-card-open { min-height: 0; border-radius: 0; padding: 12px 12px 0; background: transparent; }
+.cl-root .cl-card-body { display: block; width: 100%; min-height: 0; border: 0; border-radius: 0; padding: 0 12px 12px; text-align: left; background: transparent; }
+.cl-root .cl-card-body:hover { background: transparent; }
 .cl-root .cl-card-top, .cl-root .cl-list-view .cl-card-top { align-items: flex-start; gap: 10px; padding-inline: 30px; min-height: 56px; }
 .cl-root .cl-card h3 { color: var(--cl-bookmark); font: 600 16px/1.5 Georgia, "Noto Serif SC", "Songti SC", "SimSun", serif; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .cl-root .cl-card-open:hover h3 { text-decoration-thickness: 2px; }
 .cl-root .cl-card-identity .cl-muted { margin-top: 3px; font-size: 11px; }
-.cl-root .cl-card-tags { margin-top: 8px; color: var(--cl-secondary); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-height: 36px; overflow: hidden; overflow-wrap: anywhere; text-align: left; }
+.cl-root .cl-card-tags { margin: 8px 12px 0; color: var(--cl-secondary); font-size: 12px; line-height: 24px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; max-height: 48px; overflow: hidden; overflow-wrap: anywhere; text-align: left; }
+.cl-root .cl-card-tags:focus-within { display: block; max-height: none; }
+.cl-root .cl-tag-button { display: inline; border: 0; border-radius: 2px; margin: 0; padding: 2px; min-width: 0; width: auto; background: transparent; color: inherit; font: inherit; line-height: inherit; box-shadow: none; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; overflow-wrap: anywhere; }
+.cl-root .cl-tag-button:hover, .cl-root .cl-tag-button[aria-pressed="true"] { color: var(--cl-bookmark); background: var(--cl-bookmark-fill); }
+.cl-root .cl-active-tag { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-left: 10px; border-left: 3px solid var(--cl-bookmark); background: var(--cl-bookmark-fill); color: var(--cl-bookmark); font-size: 12px; }
+.cl-root .cl-active-tag > span { min-width: 0; overflow-wrap: anywhere; }
+.cl-root .cl-active-tag .cl-button { flex-shrink: 0; white-space: nowrap; }
 .cl-root .cl-card-tag-source { font-weight: 600; }
 .cl-root .cl-card-tag-ai { color: var(--cl-bookmark); }
 .cl-root .cl-match { color: #491900; background: #ffe3a1; border-radius: 2px; padding: 0; font: inherit; text-decoration: inherit; box-shadow: inset 0 -1px #c18b3f; }

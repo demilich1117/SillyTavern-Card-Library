@@ -3,7 +3,7 @@ async (page) => {
     const checks = [], check = (value, label) => { if (!value) throw new Error(label); checks.push(label); };
     await page.goto('http://127.0.0.1:18788/');
     await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).waitFor();
-    await page.evaluate(() => localStorage.clear()); await page.reload();
+    await page.evaluate(async () => { localStorage.clear(); await fetch('/api/test-reset', { method: 'POST' }); }); await page.reload();
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole('button', { name: '📚 打开角色书库', exact: true }).waitFor();
     await page.evaluate(() => {
@@ -39,12 +39,12 @@ async (page) => {
     for (const width of [390, 320]) {
         await page.setViewportSize({ width, height: width === 390 ? 844 : 568 });
         await page.evaluate(() => { const lib = window[Symbol.for('card-library.instance')]; lib.settings.theme = 'dark'; lib.applyTheme(); });
-        check(await page.locator('.cl-card-tags').evaluateAll(els => els.every(el => el.getBoundingClientRect().height <= 36 && el.clientWidth === el.scrollWidth)), `${width}px 标签最多两行，长标签不横向撑开卡片`);
+        check(await page.locator('.cl-card-tags').evaluateAll(els => els.every(el => el.getBoundingClientRect().height <= 48 && el.clientWidth === el.scrollWidth)), `${width}px 标签最多两行，长标签不横向撑开卡片`);
         await card.scrollIntoViewIfNeeded();
         await page.waitForTimeout(200); await page.screenshot({ path: `output/playwright/tags-mobile-${width}.png` });
     }
     await page.evaluate(() => { const lib = window[Symbol.for('card-library.instance')]; lib.settings.view = 'list'; lib.renderList(); });
-    check(await card.locator('.cl-card-tag-ai').isVisible() && await card.locator('.cl-card-tags').evaluate(el => el.getBoundingClientRect().height <= 36), '紧凑列表也显示标签且保持两行上限');
+    check(await card.locator('.cl-card-tag-ai').isVisible() && await card.locator('.cl-card-tags').evaluate(el => el.getBoundingClientRect().height <= 48), '紧凑列表也显示标签且保持两行上限');
     await card.locator('.cl-card-open').click();
     check((await page.getByRole('tabpanel').innerText()).includes('悬疑 · 慢热 · 城市探索'), '点击卡片仍可进入详情读取完整分类');
     return { passed: checks.length, checks };

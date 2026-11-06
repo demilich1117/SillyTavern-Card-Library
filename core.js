@@ -129,11 +129,16 @@ export function searchRecord(record, query, scope = 'all', summary = null) {
     return { label: field.label, text: `${position ? '…' : ''}${field.text.slice(position, position + 220)}` };
 }
 
-export function filterRecords(records, settings, { query = '', group = 'all', scope = 'all', sort = 'name' } = {}) {
+export function filterRecords(records, settings, { query = '', group = 'all', scope = 'all', sort = 'name', tag = '' } = {}) {
     const members = settings.groups.find(item => item.id === group)?.members || [];
     const grouped = new Set(settings.groups.flatMap(item => item.members));
     const result = [];
     for (const record of records) {
+        if (tag) {
+            const types = settings.summaries[metaKey(record.id)]?.types;
+            const tags = [...(Array.isArray(record.data.tags) ? record.data.tags : []), ...(Array.isArray(types) ? types : [])];
+            if (!tags.some(value => normalizeText(text(value).trim()) === normalizeText(tag.trim()))) continue;
+        }
         if (group === 'favorites' && !settings.favorites.includes(record.id)) continue;
         if (group === 'ungrouped' && grouped.has(record.id)) continue;
         if (!['all', 'favorites', 'ungrouped'].includes(group) && !members.includes(record.id)) continue;
